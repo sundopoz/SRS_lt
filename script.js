@@ -14,6 +14,7 @@ let view='study', deckSearch='', deckFilter='all';
 let selectedIds=new Set();
 let storageOK=true;
 let sinceNewCard=0;
+let leechEnabled=true;
 
 const newState=()=>({phase:'new',step:0,int:0,ease:CONFIG.DEF_EASE,dueAt:0,reps:0,lapses:0});
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -44,7 +45,7 @@ function schedule(s0,r){
 
 /* ═══════════ STORAGE ═══════════ */
 let saveTimer=null;
-const snapshot=()=>({deck,categories,cardState,sessionStart,sessionReviews,sessionCorrect,currentFilter,view,savedAt:Date.now(),v:3});
+const snapshot=()=>({deck,categories,cardState,sessionStart,sessionReviews,sessionCorrect,currentFilter,view,leechEnabled,savedAt:Date.now(),v:3});
 function save(){
   const json=JSON.stringify(snapshot());
   let ok=false;
@@ -72,6 +73,7 @@ async function load(){
     sessionStart=d.sessionStart||Date.now();
     sessionReviews=d.sessionReviews||0; sessionCorrect=d.sessionCorrect||0;
     currentFilter=d.currentFilter||'all'; view=d.view||'study';
+    leechEnabled=d.leechEnabled!==false;
     deck.forEach(c=>{if(!cardState[c.id])cardState[c.id]=newState();});
     Object.keys(cardState).forEach(id=>{if(!deck.some(c=>c.id===id))delete cardState[id];});
     return true;
@@ -340,7 +342,7 @@ function rate(r){
   if(!deck.some(c=>c.id===currentCard.id)){currentCard=null;showingAnswer=false;renderStudyCard();return;}
   const prevLapses=(cardState[currentCard.id]||{}).lapses||0;
   const s=schedule(cardState[currentCard.id]||newState(),r);
-  if(s.lapses>prevLapses&&s.lapses>=CONFIG.LEECH_THRESHOLD&&!s.leech){
+  if(leechEnabled&&s.lapses>prevLapses&&s.lapses>=CONFIG.LEECH_THRESHOLD&&!s.leech){
     s.leech=true; s.dueAt=Date.now()+CONFIG.LEECH_COOLDOWN*1000;
     toast(`การ์ดนี้ผิดซ้ำ ${s.lapses} ครั้ง — เว้นระยะให้นานขึ้น`,true);
   }
@@ -574,6 +576,11 @@ function renderSettings(){
       <button class="btn out sm" id="s-addcat">+ หมวดใหม่</button>
     </div>
     <div class="sect">
+      <div class="sect-title">การเรียน</div>
+      <div class="sect-desc">Leech = การ์ดที่ตอบผิดซ้ำ ${CONFIG.LEECH_THRESHOLD}+ ครั้ง จะถูกเว้นระยะไม่ให้วนถี่เกินไป</div>
+      <div class="frow inline"><label class="check"><input type="checkbox" id="s-leech" ${leechEnabled?'checked':''}> เปิดใช้งาน leech detection</label></div>
+    </div>
+    <div class="sect">
       <div class="sect-title">ล้างข้อมูล</div>
       <div class="sect-desc">รีเซ็ตความคืบหน้าจะเก็บการ์ดไว้ · ลบการ์ดทั้งหมดจะเหลือระบบเปล่า</div>
       <div class="sect-acts">
@@ -593,6 +600,9 @@ function renderSettings(){
   on('s-exp-deck',()=>exportJSON(false));
   on('s-exp-full',()=>exportJSON(true));
   on('s-bulk',openBulkModal);
+  const leechCk=document.getElementById('s-leech');
+  if(leechCk)leechCk.addEventListener('change',e=>{leechEnabled=e.target.checked;save();
+    toast(leechEnabled?'เปิดใช้งาน leech detection':'ปิด leech detection แล้ว');});
   on('s-addcat',()=>askText({title:'หมวดใหม่',label:'ชื่อหมวด',okText:'เพิ่ม',onOk:v=>{
     const colors=['#5C8A3E','#8A5E2E','#2E5C8A','#8A2E5C','#5C2E8A','#2E8A8A','#8A8A2E','#3A7F7A'];
     categories.push({id:uid('cat'),label:v,color:colors[categories.length%colors.length]});
