@@ -284,7 +284,6 @@ function renderStudyCard(){
     <div class="card-tag" style="color:${esc(cat.color)}">${esc(cat.label)}</div>
     <div class="card-stage ${sc}">${c.warn?esc(c.warn)+' ':''}${stage}<button class="card-edit" id="edit-cur">edit</button></div>
     <div class="card-content">
-      <div class="prompt-label">${c.frontLang?esc(c.frontLang):'—'}</div>
       <div class="${fc}">${c.front}</div>
       ${c.hint&&!showingAnswer?`<div class="hint">${esc(c.hint)}</div>`:''}
     </div>${ans}
@@ -423,19 +422,13 @@ function renderDeckList(){
 function openCardModal(card){
   if(!categories.length)categories.push({id:'default',label:'ทั่วไป',color:'#5C7F8A'});
   const isEdit=!!card;
-  const c=card||{cat:categories[0].id,front:'',frontLang:'',back:'',backLang:'',note:'',warn:null,tag:'',mono:false};
+  const c=card||{cat:categories[0].id,front:'',back:'',note:'',warn:null,tag:'',mono:false};
   const opts=categories.map(k=>`<option value="${esc(k.id)}" ${k.id===c.cat?'selected':''}>${esc(k.label)}</option>`).join('');
   openModal(`<div class="modal">
     <div class="m-head"><div class="m-title">${isEdit?'แก้การ์ด':'เพิ่มการ์ดใหม่'}</div><button class="m-close">×</button></div>
     <div class="frow"><div class="flabel">หมวดหมู่</div><select class="fselect" id="f-cat">${opts}</select></div>
-    <div class="fgrid">
-      <div class="frow"><div class="flabel">Front (คำถาม)</div><input type="text" class="finput" id="f-front" value="${esc(c.front)}"></div>
-      <div class="frow"><div class="flabel">ป้ายกำกับ front (ไม่บังคับ)</div><input type="text" class="finput" id="f-fl" value="${esc(c.frontLang||'')}" placeholder="เช่น formula, term, unit"></div>
-    </div>
-    <div class="fgrid">
-      <div class="frow"><div class="flabel">Back (คำตอบ)</div><input type="text" class="finput" id="f-back" value="${esc(c.back)}"></div>
-      <div class="frow"><div class="flabel">ป้ายกำกับ back (ไม่บังคับ)</div><input type="text" class="finput" id="f-bl" value="${esc(c.backLang||'')}" placeholder="เช่น answer, translation"></div>
-    </div>
+    <div class="frow"><div class="flabel">Front (คำถาม)</div><input type="text" class="finput" id="f-front" value="${esc(c.front)}"></div>
+    <div class="frow"><div class="flabel">Back (คำตอบ)</div><input type="text" class="finput" id="f-back" value="${esc(c.back)}"></div>
     <div class="fgrid">
       <div class="frow"><div class="flabel">Tag / badge (ไม่บังคับ)</div><input type="text" class="finput" id="f-tag" value="${esc(c.tag||'')}" placeholder="เช่น chapter 3, hard, formula"></div>
       <div class="frow inline"><label class="check"><input type="checkbox" id="f-mono" ${c.mono?'checked':''}> แสดงคำตอบแบบ monospace</label></div>
@@ -457,7 +450,6 @@ function openCardModal(card){
         const back=r.querySelector('#f-back').value.trim();
         if(!front||!back){toast('ต้องใส่ทั้ง front และ back',true);return;}
         const data={cat:r.querySelector('#f-cat').value,front,back,
-          frontLang:r.querySelector('#f-fl').value.trim()||null,backLang:r.querySelector('#f-bl').value.trim()||null,
           note:r.querySelector('#f-note').value.trim()||null,
           tag:r.querySelector('#f-tag').value.trim()||null,
           mono:r.querySelector('#f-mono').checked,
@@ -481,10 +473,6 @@ function openBulkModal(){
     <div class="m-head"><div class="m-title">Bulk import (TSV / CSV)</div><button class="m-close">×</button></div>
     <div class="fhint" style="margin-bottom:10px">แต่ละบรรทัด: <code>front → back → [หมวด] → [note]</code> คั่นด้วย Tab, | , ; หรือ ,</div>
     <div class="frow"><div class="flabel">หมวดหมู่ default</div><select class="fselect" id="b-cat">${opts}</select></div>
-    <div class="fgrid">
-      <div class="frow"><div class="flabel">ป้ายกำกับ front (ไม่บังคับ)</div><input type="text" class="finput" id="b-fl" placeholder="เช่น term, formula"></div>
-      <div class="frow"><div class="flabel">ป้ายกำกับ back (ไม่บังคับ)</div><input type="text" class="finput" id="b-bl" placeholder="เช่น answer, meaning"></div>
-    </div>
     <div class="frow"><div class="flabel">วางข้อมูล</div><textarea class="ftext" id="b-text" placeholder="word&#9;meaning&#10;term&#9;definition"></textarea></div>
     <div id="b-prev" style="display:none"><div class="flabel" style="margin-bottom:5px">Preview</div><div class="preview" id="b-list"></div></div>
     <div class="m-acts">
@@ -520,14 +508,13 @@ function openBulkModal(){
         go.disabled=!ok; go.textContent=`Import ${ok} ใบ`;});
       r.querySelector('#b-go').addEventListener('click',()=>{
         const rows=parse().filter(x=>!x.err);
-        const fl=r.querySelector('#b-fl').value.trim()||null, bl=r.querySelector('#b-bl').value.trim()||null;
         let added=0,skipped=0;
         rows.forEach(x=>{
           if(x.dup){skipped++;return;}
           let cid=x.cat;
           let found=categories.find(k=>k.id===cid||k.label===cid);
           if(!found){found={id:uid('cat'),label:cid,color:'#5C7F8A'};categories.push(found);}
-          const nc={id:uid('u'),cat:found.id,front:x.front,back:x.back,frontLang:fl,backLang:bl,note:x.note};
+          const nc={id:uid('u'),cat:found.id,front:x.front,back:x.back,note:x.note};
           deck.push(nc);cardState[nc.id]=newState();added++;});
         save();close();
         toast(`เพิ่ม ${added} ใบ${skipped?` · ข้ามซ้ำ ${skipped}`:''}`);
@@ -564,7 +551,7 @@ function renderSettings(){
       <div class="sect-desc">รีเซ็ตความคืบหน้าจะเก็บการ์ดไว้ · ลบการ์ดทั้งหมดจะเหลือระบบเปล่า</div>
       <div class="sect-acts">
         <button class="btn sub" id="s-reset-prog">รีเซ็ตความคืบหน้า</button>
-        <button class="btn danger" id="s-wipe">ลบการ์ดทั้งหมด</button>
+        <button class="btn danger" id="s-wipe">ล้างทุกอย่าง</button>
       </div>
     </div>
     <div class="sect">
@@ -588,10 +575,11 @@ function renderSettings(){
     onOk:()=>{deck.forEach(c=>cardState[c.id]=newState());
       sessionStart=Date.now();sessionReviews=0;sessionCorrect=0;currentCard=null;
       save();renderSettings();updateTabs();toast('รีเซ็ตแล้ว');}}));
-  on('s-wipe',()=>ask({title:'ลบการ์ดทั้งหมด',okText:'ลบทั้งหมด',danger:true,
-    body:`ลบการ์ดทั้งหมด <strong>${deck.length}</strong> ใบ และความคืบหน้า?<br><span class="danger-txt">ทำแล้วกู้คืนไม่ได้ — ควรส่งออกไฟล์ก่อน</span>`,
-    onOk:()=>{deck=[];cardState={};selectedIds.clear();currentCard=null;showingAnswer=false;
-      sessionReviews=0;sessionCorrect=0;save();render();toast('ลบทั้งหมดแล้ว');}}));
+  on('s-wipe',()=>ask({title:'ล้างทุกอย่าง',okText:'ล้างทั้งหมด',danger:true,
+    body:`ลบการ์ดทั้งหมด <strong>${deck.length}</strong> ใบ, หมวดหมู่ <strong>${categories.length}</strong> หมวด และความคืบหน้า?<br><span class="danger-txt">ทำแล้วกู้คืนไม่ได้ — ควรส่งออกไฟล์ก่อน</span>`,
+    onOk:()=>{deck=[];categories=[];cardState={};selectedIds.clear();currentCard=null;showingAnswer=false;
+      currentFilter='all';deckFilter='all';
+      sessionReviews=0;sessionCorrect=0;save();render();toast('ล้างทั้งหมดแล้ว');}}));
 }
 function renderCats(){
   const list=document.getElementById('cat-list'); if(!list)return;

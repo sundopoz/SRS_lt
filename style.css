@@ -36,7 +36,6 @@ html,body{background:var(--bg);color:var(--ink);font-family:'Inter','IBM Plex Sa
 .card-edit{background:none;border:1px solid var(--line-2);padding:4px 8px;font-family:'JetBrains Mono',monospace;font-size:9px;color:var(--ink-2);cursor:pointer;min-height:26px}
 .card-edit:hover{background:var(--bg);color:var(--ink)}
 .card-content{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:10px;padding:18px 0}
-.prompt-label{font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-3)}
 .prompt{font-family:'Fraunces',serif;font-size:38px;font-weight:500;text-align:center;line-height:1.1;letter-spacing:-.02em}
 .prompt.small{font-size:28px}.prompt.smaller{font-size:20px}
 .prompt .inline-note{color:var(--ink-3);font-family:'JetBrains Mono',monospace;font-size:.55em;letter-spacing:.1em;text-transform:uppercase;font-style:normal;margin:0 6px;vertical-align:middle}
