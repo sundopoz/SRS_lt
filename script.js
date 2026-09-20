@@ -2,7 +2,8 @@
 
 /* ═══════════ CONFIG ═══════════ */
 const CONFIG={LEARNING_STEPS:[20,60,300],GRAD:600,EASY_GRAD:900,
-  MIN_EASE:1.3,MAX_EASE:3.0,DEF_EASE:2.5,HARD_MULT:1.2,EASY_MULT:1.3,MAX_INT:4*3600};
+  MIN_EASE:1.3,MAX_EASE:3.0,DEF_EASE:2.5,HARD_MULT:1.2,EASY_MULT:1.3,MAX_INT:4*3600,
+  LEECH_THRESHOLD:8,LEECH_COOLDOWN:1800};
 const KEY='srs_adaptive_v3';
 
 /* ═══════════ STATE ═══════════ */
@@ -12,6 +13,7 @@ let sessionStart=Date.now(), sessionReviews=0, sessionCorrect=0;
 let view='study', deckSearch='', deckFilter='all';
 let selectedIds=new Set();
 let storageOK=true;
+let sinceNewCard=0;
 
 const newState=()=>({phase:'new',step:0,int:0,ease:CONFIG.DEF_EASE,dueAt:0,reps:0,lapses:0});
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -157,20 +159,38 @@ function deleteCard(id){
 }
 
 /* ═══════════ SELECTION ═══════════ */
+/* Mirrors Anki's queue model: due learning cards always take priority (sorted
+   earliest-due-first, not randomly reselected), review cards come next, and
+   new cards trickle in at a ratio instead of flooding the pool — otherwise a
+   few fast-cycling learning cards dominate and new cards never get a turn. */
 const inFilter=c=>currentFilter==='all'||c.cat===currentFilter;
+function notCurrent(c){return !currentCard||c.id!==currentCard.id;}
 function pickNext(){
   const now=Date.now();
-  const due=deck.filter(c=>inFilter(c)&&cardState[c.id]&&cardState[c.id].dueAt<=now);
-  if(!due.length)return null;
-  const pool=[];
-  due.forEach(c=>{const s=cardState[c.id];
-    if(s.lapses>0&&s.phase==='learning')pool.push(c,c,c);
-    else if(s.phase==='new')pool.push(c,c);
-    else if(s.phase==='learning')pool.push(c,c);
-    else pool.push(c);});
-  const nr=pool.filter(c=>!currentCard||c.id!==currentCard.id);
-  const arr=nr.length?nr:pool;
-  return arr[Math.floor(Math.random()*arr.length)];
+  const pool=deck.filter(inFilter);
+  const learningDue=pool.filter(c=>{const s=cardState[c.id];return s&&s.phase==='learning'&&s.dueAt<=now;})
+    .sort((a,b)=>cardState[a.id].dueAt-cardState[b.id].dueAt);
+  if(learningDue.length){
+    const alt=learningDue.filter(notCurrent);
+    return (alt.length?alt:learningDue)[0];
+  }
+  const reviewDue=pool.filter(c=>{const s=cardState[c.id];return s&&s.phase==='review'&&s.dueAt<=now;})
+    .sort((a,b)=>cardState[a.id].dueAt-cardState[b.id].dueAt);
+  const fresh=pool.filter(c=>{const s=cardState[c.id];return s&&s.phase==='new';});
+  if(!reviewDue.length&&!fresh.length)return null;
+  if(fresh.length){
+    const ratio=reviewDue.length?Math.max(1,Math.round(reviewDue.length/fresh.length)):1;
+    sinceNewCard++;
+    if(!reviewDue.length||sinceNewCard>=ratio){
+      sinceNewCard=0;
+      return fresh[0];
+    }
+  }
+  if(reviewDue.length){
+    const alt=reviewDue.filter(notCurrent);
+    return (alt.length?alt:reviewDue)[0];
+  }
+  return fresh[0]||null;
 }
 function nextDue(){
   const now=Date.now(); let m=Infinity;
@@ -269,6 +289,7 @@ function renderStudyCard(){
   else if(s.phase==='learning'&&s.lapses>0){stage=`ลืม ×${s.lapses}`;sc='warn';}
   else if(s.phase==='learning')stage=`เรียน ${s.step+1}/${CONFIG.LEARNING_STEPS.length}`;
   else stage=`ทวน · ease ${s.ease.toFixed(1)}`;
+  if(s.leech){stage+=' · leech 🩸';sc='warn';}
   const raw=String(c.front).replace(/<[^>]*>/g,'');
   let fc='prompt';
   if(raw.length>15)fc+=' small'; if(raw.length>30)fc+=' smaller';
@@ -317,7 +338,13 @@ function flip(){if(currentCard&&!showingAnswer){showingAnswer=true;renderStudyCa
 function rate(r){
   if(!currentCard||!showingAnswer)return;
   if(!deck.some(c=>c.id===currentCard.id)){currentCard=null;showingAnswer=false;renderStudyCard();return;}
-  cardState[currentCard.id]=schedule(cardState[currentCard.id]||newState(),r);
+  const prevLapses=(cardState[currentCard.id]||{}).lapses||0;
+  const s=schedule(cardState[currentCard.id]||newState(),r);
+  if(s.lapses>prevLapses&&s.lapses>=CONFIG.LEECH_THRESHOLD&&!s.leech){
+    s.leech=true; s.dueAt=Date.now()+CONFIG.LEECH_COOLDOWN*1000;
+    toast(`การ์ดนี้ผิดซ้ำ ${s.lapses} ครั้ง — เว้นระยะให้นานขึ้น`,true);
+  }
+  cardState[currentCard.id]=s;
   sessionReviews++; if(r>1)sessionCorrect++;
   showingAnswer=false; currentCard=null;
   save(); renderStudyCard(); updateTabs();
